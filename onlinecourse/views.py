@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
 # <HINT> Import any new Models here
-from .models import Course, Enrollment
+from .models import Course, Enrollment, Question, Choice, Submission
 from django.contrib.auth.models import User
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse
@@ -11,7 +11,55 @@ import logging
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
 # Create your views here.
+# <HINT> Create an exam result view to check if learner passed exam and show their question results and result for each question,
+# you may implement it based on the following logic:
+        # Get course and submission based on their ids
+        # Get the selected choice ids from the submission record
+        # For each selected choice, check if it is a correct answer or not
+        # Calculate the total score
+def show_exam_result(request, course_id, submission_id):
+    course = Course.objects.get(pk=course_id)
+    submission = Submission.objects.get(pk=submission_id)
+    score = 0
+    max_score=0
+    num_correct={}
+    num_chosen={}
+    for lesson in course.lesson_set.all():
+        for quest in lesson.question_set.all():
+            count = 0
+            for choice in quest.choice_set.all():
+                if choice.is_correct == True:
+                    count+=1
+            num_correct[quest.pk]= count
+            num_chosen[quest.pk]=0    
+    
+    for choice in submission.choices.all():
+        if choice.is_correct ==  True:
+            num_chosen[choice.question.pk]+=1
+    for lesson in course.lesson_set.all():
+        for quest in lesson.question_set.all():
+            max_score+=quest.points
+            if num_chosen[quest.pk] == num_correct[quest.pk]:
+                score+=quest.points
+    final_grade=(score/max_score)*100
+    return render(request,'onlinecourse/exam_result_bootstrap.html',context={'course':course,'selected_ids':submission.choices.all(),'grade':final_grade})
+    
 
+    
+
+def submit(request, course_id):
+    def extract_answers(request):
+        submitted_anwsers = []
+        for key in request.POST:
+            if key.startswith('choice'):
+                value = request.POST[key]
+                choice_id = int(value)
+                submitted_anwsers.append(choice_id)
+        return submitted_anwsers
+    enroll = Enrollment.objects.get(user=request.user, course=Course.objects.get(pk=course_id))
+    sub = Submission.objects.create(enrollment=enroll)
+    sub.choices.set(extract_answers(request))
+    return redirect('onlinecourse:result', course_id=course_id, submission_id=sub.pk)
 
 def registration_request(request):
     context = {}
@@ -124,13 +172,7 @@ def enroll(request, course_id):
 #    return submitted_anwsers
 
 
-# <HINT> Create an exam result view to check if learner passed exam and show their question results and result for each question,
-# you may implement it based on the following logic:
-        # Get course and submission based on their ids
-        # Get the selected choice ids from the submission record
-        # For each selected choice, check if it is a correct answer or not
-        # Calculate the total score
-#def show_exam_result(request, course_id, submission_id):
+
 
 
 
